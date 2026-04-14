@@ -4,9 +4,10 @@ class ScheduleAnalysis {
   final String recommendedSchedule;
   final String explanation;
 
-
-
   ScheduleAnalysis({
-    required this.conflicts, required this.explanation, required this.rankedTasks, required this.recommendedSchedule,
-});
+    required this.conflicts,
+    required this.rankedTasks,
+    required this.recommendedSchedule,
+    required this.explanation,
+  });
 }

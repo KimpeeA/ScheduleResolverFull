@@ -1,19 +1,22 @@
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/task_model.dart';
 import '../models/schedule_analysis.dart';
 
-class AiScheduleService extends ChangeNotifier{
-
+class AiScheduleService extends ChangeNotifier {
   ScheduleAnalysis? _currentAnalysis;
-  bool _isLoading =false;
+  bool _isLoading = false;
   String? _errorMessage;
 
-  final String _apiKey = '';
+  final String _apiKey = "AIzaSyD9V_vHYo88hQZQYShszu5PnV7eg-gkpeo";
 
+  ScheduleAnalysis? get currentAnalysis => _currentAnalysis;
+
+  bool get isLoading => _isLoading;
+
+  String? get errorMessage => _errorMessage;
 
   Future<void> analyzeSchedule(List<TaskModel> tasks) async {
     if (_apiKey.isEmpty || tasks.isEmpty) return;
@@ -23,27 +26,68 @@ class AiScheduleService extends ChangeNotifier{
 
     try {
       final model = GenerativeModel(model: 'gemini-2.5-flash', apiKey: _apiKey);
-      final tasksJson = jsonEncode(tasks.map((t) => t.toJson()).toList());
-      final prompt = '''
-          
-          Your are an expert student scheduling assistant. The user has provided the following tasks for their day in JSON format: $tasksJson
-          
-          Your job is to analyze these tasks, identify any overlaps or conflicts in their start and end time abd suggest a better balanced schedule.      } catch (e, s) {
-          consider their urgency, Importance, and required energy level         } catch (e, s) {
-          
-          Please provide exactly 4 sections of markdown text:
-          
-          
-          1. ### Detected Conflicts
-          List any Scheduling conflicts
-          2. Ranked Tasks
-          Rank which tasks need attention first based on the urgency, importance and energy . Provide a brief reason on each.
-          
-          
-          
-          ''';
-      } catch (e) {
-      finally {}
-      }
+      final taskJson = jsonEncode(tasks.map((t) => t.toJson()).toList());
+      final prompt =
+      '''
+      
+      You are an Expert Student scheduling assistant. The user has provided the following tasks for their day in JSON format:
+      $taskJson
+      
+      Your job is to analyze these task, identify any overlaps or conflicts in their start and end times, and suggest a better balanced schedule.
+      Consider their urgency, importance and required energy level.
+      
+      Please provide exactly 4 sections of markdown text:
+      1. ### Detected Conflicts
+      List any scheduling conflicts or state that there are none.
+      2. ### Ranked Tasks 
+      Rank which task need attention first based on urgency, importance and energy, provide a brief reason for each.
+      3. ### Recommended Schedule
+      Provide a revised daily timeline view adjusting the task times to resolve conflicts and balance the student's workload, study time, and rest. 
+      4. ### Explanation
+      Explain why this recommendation was made in simple language that a student easily understand.
+         
+      Ensure the markdown is well-formatted and easy to read. Do not include extra outside of these headers.
+            
+      ''';
+
+      final content = [Content.text(prompt)];
+      final response = await model.generateContent(content);
+
+      _currentAnalysis = _parseResponse(response.text ?? '');
+    } catch (e) {
+      _errorMessage = 'Failed: \$e';
+      debugPrint(e.toString());
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
+
+  ScheduleAnalysis _parseResponse(String fullText) {
+    String conflicts = "",
+        rankedTasks = "",
+        recommendedSchedule = "",
+        explanation = "";
+
+    final sections = fullText.split('### ');
+    for (var section in sections) {
+      if (section.startsWith('Detected Conflicts'))
+        conflicts = section.replaceFirst('Detected Conflicts', '').trim();
+      else if (section.startsWith('Ranked Tasks'))
+        rankedTasks = section.replaceFirst('Ranked Tasks', '').trim();
+      else if (section.startsWith('Recommended Schedule'))
+        recommendedSchedule = section
+            .replaceFirst('Recommended Schedule', '')
+            .trim();
+      else if (section.startsWith('Explanation'))
+        explanation = section.replaceFirst('Explanation', '').trim();
+    }
+
+    return ScheduleAnalysis(
+      conflicts: conflicts,
+      rankedTasks: rankedTasks,
+      recommendedSchedule: recommendedSchedule,
+      explanation: explanation,
+    );
+  }
+}
